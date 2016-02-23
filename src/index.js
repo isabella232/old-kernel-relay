@@ -15,6 +15,8 @@ function isChildMessage(msg) {
 }
 
 app.get('/spawn/*', function(req, res) {
+  res.header('Access-Control-Allow-Origin', '*');
+
   const kernelName = req.url.split('/').slice(-1)[0];
   spawnteract.launch(kernelName).then(kernel => {
     const id = uuid();
@@ -74,17 +76,19 @@ app.get('/spawn/*', function(req, res) {
       });
     });
 
-    res.send(JSON.stringify({success: id}));
+    res.send(JSON.stringify({id: id}));
   }).catch(err => {
-    res.send(JSON.stringify({error: String(err)}));
+    res.status(500).send(JSON.stringify({error: String(err)}));
   });
 });
 
 app.get('/shutdown/*', function(req, res) {
+  res.header('Access-Control-Allow-Origin', '*');
+
   const id = req.url.split('/').slice(-1)[0];
   const kernelInfo = kernels[id];
   if (!kernelInfo) {
-    res.send(JSON.stringify({error: 'kernel doesn\' exist'}));
+    res.status(500).send(JSON.stringify({error: 'kernel doesn\' exist'}));
     return;
   }
 
@@ -114,9 +118,9 @@ app.get('/shutdown/*', function(req, res) {
           delete io.nsps['/iopub/' + id];
 
           // Send success
-          res.send(JSON.stringify({success: id}));
+          res.send(JSON.stringify({id: id}));
         } catch(error) {
-          res.send(JSON.stringify({error: String(error)}));
+          res.status(500).send(JSON.stringify({error: String(error)}));
         }
         delete kernels[id];
         logger.kernelStopped(id);
@@ -126,6 +130,7 @@ app.get('/shutdown/*', function(req, res) {
 });
 
 app.get('/list', function(req, res) {
+  res.header('Access-Control-Allow-Origin', 'localhost');
   res.send(JSON.stringify(Object.keys(kernels)));
 });
 
