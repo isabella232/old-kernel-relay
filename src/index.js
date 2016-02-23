@@ -45,14 +45,20 @@ app.get('/spawn/*', function(req, res) {
 
     // Connect sockets -> enchannel
     kernelInfo.shellSocket.on('connection', socket => {
-      kernelInfo.shell.subscribe(msg => socket.emit('msg', msg));
-      socket.on('msg', msg => kernelInfo.shell.next(shell));
-      socket.on('disconnect', () => {
-        // TODO: Stop subscription to shell
-      });
+      const observer = kernelInfo.shell.subscribe(msg => socket.emit('msg', msg));
+      socket.on('msg', msg => kernelInfo.shell.next(msg));
+      socket.on('disconnect', () => observer.dispose());
     });
-    // TODO: iopub
-    // TODO: stdin
+    kernelInfo.stdinSocket.on('connection', socket => {
+      const observer = kernelInfo.stdin.subscribe(msg => socket.emit('msg', msg));
+      socket.on('msg', msg => kernelInfo.stdin.next(msg));
+      socket.on('disconnect', () => observer.dispose());
+    });
+    kernelInfo.iopubSocket.on('connection', socket => {
+      const observer = kernelInfo.iopub.subscribe(msg => socket.emit('msg', msg));
+      socket.on('msg', msg => kernelInfo.iopub.next(msg));
+      socket.on('disconnect', () => observer.dispose());
+    });
 
     res.send(JSON.stringify({success: id}));
   }).catch(err => {
