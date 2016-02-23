@@ -5,6 +5,7 @@ const spawnteract = require('spawnteract');
 const enchannel = require('enchannel-zmq-backend');
 const fs = require('fs');
 const io = require('socket.io')(http);
+const logger = require('./logger');
 const kernels = {};
 const username = process.env.LOGNAME || process.env.USER ||
   process.env.LNAME || process.env.USERNAME;
@@ -17,6 +18,7 @@ app.get('/spawn/*', function(req, res) {
   const kernelName = req.url.split('/').slice(-1)[0];
   spawnteract.launch(kernelName).then(kernel => {
     const id = uuid();
+    logger.kernelStarted(id, kernelName);
 
     const kernelInfo = kernels[id] = {
       kernel,
@@ -45,19 +47,31 @@ app.get('/spawn/*', function(req, res) {
 
     // Connect sockets -> enchannel
     kernelInfo.shellSocket.on('connection', socket => {
+      logger.userConnected(socket.request.connection, 'shell', id);
       const observer = kernelInfo.shell.subscribe(msg => socket.emit('msg', msg));
       socket.on('msg', msg => kernelInfo.shell.next(msg));
-      socket.on('disconnect', () => observer.dispose());
+      socket.on('disconnect', () => {
+        observer.dispose();
+        logger.userDisconnected(socket.request.connection, 'shell', id);
+      });
     });
     kernelInfo.stdinSocket.on('connection', socket => {
+      logger.userConnected(socket.request.connection, 'stdin', id);
       const observer = kernelInfo.stdin.subscribe(msg => socket.emit('msg', msg));
       socket.on('msg', msg => kernelInfo.stdin.next(msg));
-      socket.on('disconnect', () => observer.dispose());
+      socket.on('disconnect', () => {
+        observer.dispose();
+        logger.userDisconnected(socket.request.connection, 'stdin', id);
+      });
     });
     kernelInfo.iopubSocket.on('connection', socket => {
+      logger.userConnected(socket.request.connection, 'iopub', id);
       const observer = kernelInfo.iopub.subscribe(msg => socket.emit('msg', msg));
       socket.on('msg', msg => kernelInfo.iopub.next(msg));
-      socket.on('disconnect', () => observer.dispose());
+      socket.on('disconnect', () => {
+        observer.dispose();
+        logger.userDisconnected(socket.request.connection, 'iopub', id);
+      });
     });
 
     res.send(JSON.stringify({success: id}));
@@ -105,6 +119,7 @@ app.get('/shutdown/*', function(req, res) {
           res.send(JSON.stringify({error: String(error)}));
         }
         delete kernels[id];
+        logger.kernelStopped(id);
       }
     });
   kernelInfo.shell.next(shutDownRequest);
@@ -115,7 +130,5 @@ app.get('/list', function(req, res) {
 });
 
 exports.listen = function listen(port) {
-  http.listen(port, function(){
-    console.log(`listening on *:${port}`);
-  });
+  http.listen(port, () => logger.startServer(port));
 };
