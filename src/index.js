@@ -4,6 +4,7 @@ const uuid = require('node-uuid').v4;
 const spawnteract = require('spawnteract');
 const enchannel = require('enchannel-zmq-backend');
 const fs = require('fs');
+const io = require('socket.io')(http);
 const kernels = {};
 const username = process.env.LOGNAME || process.env.USER ||
   process.env.LNAME || process.env.USERNAME;
@@ -17,11 +18,14 @@ app.get('/spawn/*', function(req, res) {
   spawnteract.launch(kernelName).then(kernel => {
     const id = uuid();
 
-    kernels[id] = {
+    const kernelInfo = kernels[id] = {
       kernel,
       shell: enchannel.createShellSubject(id, kernel.config),
       stdin: enchannel.createStdinSubject(id, kernel.config),
       iopub: enchannel.createIOPubSubject(id, kernel.config),
+      shellSocket: io.of('/shell/' + id),
+      stdinSocket: io.of('/stdin/' + id),
+      iopubSocket: io.of('/iopub/' + id),
       createMessage(msg_type) {
         return {
           header: {
@@ -38,6 +42,18 @@ app.get('/spawn/*', function(req, res) {
         };
       }
     };
+
+    // Connect sockets -> enchannel
+    kernelInfo.shellSocket.on('connection', socket => {
+      kernelInfo.shell.subscribe(msg => socket.emit('msg', msg));
+      socket.on('msg', msg => kernelInfo.shell.next(shell));
+      socket.on('disconnect', () => {
+        // TODO: Stop subscription to shell
+      });
+    });
+    // TODO: iopub
+    // TODO: stdin
+
     res.send(JSON.stringify({success: id}));
   }).catch(err => {
     res.send(JSON.stringify({error: String(err)}));
@@ -64,11 +80,20 @@ app.get('/shutdown/*', function(req, res) {
     .subscribe(content => {
       if (!content.restart) {
         try {
+
+          // Clean-up kernel resources
           kernelInfo.kernel.spawn.kill();
           kernelInfo.shell.complete();
           kernelInfo.stdin.complete();
           kernelInfo.iopub.complete();
           fs.unlink(kernelInfo.kernel.connectionFile);
+
+          // Clean-up socket.io namespaces
+          delete io.nsps['/shell/' + id];
+          delete io.nsps['/stdin/' + id];
+          delete io.nsps['/iopub/' + id];
+
+          // Send success
           res.send(JSON.stringify({success: id}));
         } catch(error) {
           res.send(JSON.stringify({error: String(error)}));
@@ -82,14 +107,6 @@ app.get('/shutdown/*', function(req, res) {
 app.get('/list', function(req, res) {
   res.send(JSON.stringify(Object.keys(kernels)));
 });
-
-// Returns
-// kernel.spawn <-- The running process, from child_process.spawn(...)
-// kernel.connectionFile <-- Connection file path
-// kernel.config <-- Connection information from the file
-
-// Print the ip address and port for the shell channel
-// console.log(kernel.config.ip + ':' + kernel.config.shell_port);
 
 exports.listen = function listen(port) {
   http.listen(port, function(){
