@@ -1,0 +1,36 @@
+{
+  "name": "kernel-relay",
+  "version": "0.0.1",
+  "description": "websocket-zmq relay for Jupyter kernels ",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "bin": {
+    "kernel-relay": "./src/app.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nteract/kernel-relay.git"
+  },
+  "keywords": [
+    "websocket",
+    "zmq",
+    "jupyter",
+    "kernel",
+    "nteract"
+  ],
+  "author": "nteract contributors",
+  "license": "MPL-2.0",
+  "bugs": {
+    "url": "https://github.com/nteract/kernel-relay/issues"
+  },
+  "homepage": "https://github.com/nteract/kernel-relay#readme",
+  "dependencies": {
+    "enchannel-zmq-backend": "^1.0.1",
+    "express": "^4.13.4",
+    "node-uuid": "^1.4.7",
+    "socket.io": "^1.4.5",
+    "spawnteract": "^1.0.2"
+  }
+}
