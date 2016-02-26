@@ -22,14 +22,20 @@ app.get('/spawn/*', function(req, res) {
     const id = uuid();
     logger.kernelStarted(id, kernelName);
 
+    var disconnectSockets;
+    const disconnectedSockets = new Promise(resolve => disconnectSockets = resolve);
+
     const kernelInfo = kernels[id] = {
       kernel,
       shell: enchannel.createShellSubject(id, kernel.config),
       stdin: enchannel.createStdinSubject(id, kernel.config),
       iopub: enchannel.createIOPubSubject(id, kernel.config),
+      control: enchannel.createControlSubject(id, kernel.config),
       shellSocket: io.of('/shell/' + id),
       stdinSocket: io.of('/stdin/' + id),
       iopubSocket: io.of('/iopub/' + id),
+      controlSocket: io.of('/control/' + id),
+      disconnectSockets,
       createMessage(msg_type) {
         return {
           header: {
@@ -48,33 +54,26 @@ app.get('/spawn/*', function(req, res) {
     };
 
     // Connect sockets -> enchannel
-    kernelInfo.shellSocket.on('connection', socket => {
-      logger.userConnected(socket.request.connection, 'shell', id);
-      const observer = kernelInfo.shell.subscribe(msg => socket.emit('msg', msg));
-      socket.on('msg', msg => kernelInfo.shell.next(msg));
-      socket.on('disconnect', () => {
-        observer.dispose();
-        logger.userDisconnected(socket.request.connection, 'shell', id);
+    function connectSocketZmq(kernelSocket, name) {
+      kernelSocket.on('connection', socket => {
+        logger.userConnected(socket.request.connection, name, id);
+        const observer = kernelInfo[name].subscribe(msg => socket.emit('msg', msg));
+        socket.on('msg', msg => kernelInfo[name].next(msg));
+        const disconnect = () => {
+          if (!observer.isUnsubscribed) {
+            observer.unsubscribe();
+            logger.userDisconnected(socket.request.connection, name, id);
+          }
+        };
+        socket.on('disconnect', disconnect);
+        disconnectedSockets.then(disconnect);
       });
-    });
-    kernelInfo.stdinSocket.on('connection', socket => {
-      logger.userConnected(socket.request.connection, 'stdin', id);
-      const observer = kernelInfo.stdin.subscribe(msg => socket.emit('msg', msg));
-      socket.on('msg', msg => kernelInfo.stdin.next(msg));
-      socket.on('disconnect', () => {
-        observer.dispose();
-        logger.userDisconnected(socket.request.connection, 'stdin', id);
-      });
-    });
-    kernelInfo.iopubSocket.on('connection', socket => {
-      logger.userConnected(socket.request.connection, 'iopub', id);
-      const observer = kernelInfo.iopub.subscribe(msg => socket.emit('msg', msg));
-      socket.on('msg', msg => kernelInfo.iopub.next(msg));
-      socket.on('disconnect', () => {
-        observer.dispose();
-        logger.userDisconnected(socket.request.connection, 'iopub', id);
-      });
-    });
+    }
+
+    connectSocketZmq(kernelInfo.shellSocket, 'shell');
+    connectSocketZmq(kernelInfo.stdinSocket, 'stdin');
+    connectSocketZmq(kernelInfo.iopubSocket, 'iopub');
+    connectSocketZmq(kernelInfo.controlSocket, 'control');
 
     res.send(JSON.stringify({id: id}));
   }).catch(err => {
@@ -107,15 +106,18 @@ app.get('/shutdown/*', function(req, res) {
 
           // Clean-up kernel resources
           kernelInfo.kernel.spawn.kill();
+          kernelInfo.disconnectSockets();
           kernelInfo.shell.complete();
           kernelInfo.stdin.complete();
           kernelInfo.iopub.complete();
+          kernelInfo.control.complete();
           fs.unlink(kernelInfo.kernel.connectionFile);
 
           // Clean-up socket.io namespaces
           delete io.nsps['/shell/' + id];
           delete io.nsps['/stdin/' + id];
           delete io.nsps['/iopub/' + id];
+          delete io.nsps['/control/' + id];
 
           // Send success
           res.send(JSON.stringify({id: id}));
