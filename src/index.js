@@ -2,17 +2,13 @@ const app = require('express')();
 const http = require('http').Server(app);
 const uuid = require('node-uuid').v4;
 const spawnteract = require('spawnteract');
-const enchannel = require('enchannel-zmq-backend');
+const enchannel = require('enchannel');
+const enchannelBackend = require('enchannel-zmq-backend');
 const fs = require('fs');
 const io = require('socket.io')(http);
 const logger = require('./logger');
 const kernels = {};
-const username = process.env.LOGNAME || process.env.USER ||
-  process.env.LNAME || process.env.USERNAME;
-
-function isChildMessage(msg) {
-  return this.header.msg_id === msg.parent_header.msg_id;
-}
+const username = process.env.LOGNAME || process.env.USER || process.env.LNAME || process.env.USERNAME;
 
 app.get('/spawn/*', function(req, res) {
   res.header('Access-Control-Allow-Origin', '*');
@@ -24,41 +20,24 @@ app.get('/spawn/*', function(req, res) {
 
     var disconnectSockets;
     const disconnectedSockets = new Promise(resolve => disconnectSockets = resolve);
-
+    const channels = enchannelBackend.createChannels(id, kernel.config);
     const kernelInfo = kernels[id] = {
       kernel,
-      shell: enchannel.createShellSubject(id, kernel.config),
-      stdin: enchannel.createStdinSubject(id, kernel.config),
-      iopub: enchannel.createIOPubSubject(id, kernel.config),
-      control: enchannel.createControlSubject(id, kernel.config),
+      channels,
       shellSocket: io.of('/shell/' + id),
       stdinSocket: io.of('/stdin/' + id),
       iopubSocket: io.of('/iopub/' + id),
       controlSocket: io.of('/control/' + id),
       disconnectSockets,
-      createMessage(msg_type) {
-        return {
-          header: {
-            username,
-            id,
-            msg_type,
-            msg_id: uuid(),
-            date: new Date(),
-            version: '5.0',
-          },
-          metadata: {},
-          parent_header: {},
-          content: {},
-        };
-      }
+      createMessage: enchannel.createMessage.bind(username, id),
     };
 
     // Connect sockets -> enchannel
     function connectSocketZmq(kernelSocket, name) {
       kernelSocket.on('connection', socket => {
         logger.userConnected(socket.request.connection, name, id);
-        const observer = kernelInfo[name].subscribe(msg => socket.emit('msg', msg));
-        socket.on('msg', msg => kernelInfo[name].next(msg));
+        const observer = kernelInfo.channels[name].subscribe(msg => socket.emit('msg', msg));
+        socket.on('msg', msg => kernelInfo.channels[name].next(msg));
         const disconnect = () => {
           if (!observer.isUnsubscribed) {
             observer.unsubscribe();
@@ -91,49 +70,27 @@ app.get('/shutdown/*', function(req, res) {
     return;
   }
 
-  const shutDownRequest = kernelInfo.createMessage('shutdown_request');
-  shutDownRequest.content = {
-    restart: false
-  };
+  enchannel.shutdownRequest(kernelInfo.channels, username, id).then(() => {
+    try {
+      // Clean-up kernel resources
+      kernelInfo.kernel.spawn.kill();
+      kernelInfo.disconnectSockets();
+      fs.unlink(kernelInfo.kernel.connectionFile);
 
-  const shutDownReply = kernelInfo.shell
-    .filter(isChildMessage.bind(shutDownRequest))
-    .filter(msg => msg.header.msg_type === 'shutdown_reply')
-    .map(msg => msg.content)
-    .subscribe(content => {
-      if (!content.restart) {
-        try {
+      // Clean-up socket.io namespaces
+      delete io.nsps['/shell/' + id];
+      delete io.nsps['/stdin/' + id];
+      delete io.nsps['/iopub/' + id];
+      delete io.nsps['/control/' + id];
 
-          // Clean-up kernel resources
-          kernelInfo.kernel.spawn.kill();
-          kernelInfo.disconnectSockets();
-          kernelInfo.shell.complete();
-          kernelInfo.stdin.complete();
-          kernelInfo.iopub.complete();
-          kernelInfo.control.complete();
-          fs.unlink(kernelInfo.kernel.connectionFile);
-
-          // Clean-up socket.io namespaces
-          delete io.nsps['/shell/' + id];
-          delete io.nsps['/stdin/' + id];
-          delete io.nsps['/iopub/' + id];
-          delete io.nsps['/control/' + id];
-
-          // Send success
-          res.send(JSON.stringify({id: id}));
-        } catch(error) {
-          res.status(500).send(JSON.stringify({error: String(error)}));
-        }
-        delete kernels[id];
-        logger.kernelStopped(id);
-      }
-    });
-  kernelInfo.shell.next(shutDownRequest);
-});
-
-app.get('/list', function(req, res) {
-  res.header('Access-Control-Allow-Origin', 'localhost');
-  res.send(JSON.stringify(Object.keys(kernels)));
+      // Send success
+      res.send(JSON.stringify({id: id}));
+    } catch(error) {
+      res.status(500).send(JSON.stringify({error: String(error)}));
+    }
+    delete kernels[id];
+    logger.kernelStopped(id);
+  });
 });
 
 exports.listen = function listen(port) {
