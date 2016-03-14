@@ -19,13 +19,13 @@ kernel-relay
 ```
 
 ## Background
-The Jupyter ecosystem has kernels implemented in over 50 languages.  
-Unfortunately, by spec, the kernels use ZMQ for communications.  This means
-that an application which communicates to them must also use ZMQ.  This project,
-kernel-relay, connects to a kernel and relays ZMQ communications across socketio
-sockets.  This allows web applications to use Jupyter kernels with socketio
-instead of ZMQ.  kernel-relay includes a minimal RESTful API for managing kernel
-life cycles.
+In order to communicate with a kernel over the web, you either need to expose
+raw ZeroMQ sockets or translate to another layer which is friendly to most
+networking environments. The Jupyter Notebook uses direct websockets.  This
+project, kernel-relay, connects to a kernel and relays ZMQ communications across
+socketio sockets.  This allows web applications to use Jupyter kernels with
+socketio instead of ZMQ.  kernel-relay includes a minimal RESTful API for
+managing kernel life cycles.
 
 kernel-relay was designed to be used with
 [enchannel-socketio-backend](https://github.com/nteract/enchannel-socketio-backend).
