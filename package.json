@@ -28,7 +28,7 @@
   "homepage": "https://github.com/nteract/kernel-relay#readme",
   "dependencies": {
     "chalk": "^1.1.1",
-    "enchannel": "^1.1.1",
+    "enchannel": "^1.1.2",
     "enchannel-zmq-backend": "^1.1.0",
     "express": "^4.13.4",
     "node-uuid": "^1.4.7",
