@@ -72,29 +72,26 @@ app.get('/shutdown/*', function(req, res) {
   }
 
   enchannel.shutdownRequest(kernelInfo.channels, username, id).then(() => {
-    try {
-      // Clean-up socket.io namespaces
-      delete io.nsps['/shell/' + id];
-      delete io.nsps['/stdin/' + id];
-      delete io.nsps['/iopub/' + id];
-      delete io.nsps['/control/' + id];
+    // Clean-up socket.io namespaces
+    delete io.nsps['/shell/' + id];
+    delete io.nsps['/stdin/' + id];
+    delete io.nsps['/iopub/' + id];
+    delete io.nsps['/control/' + id];
 
-      // Clean-up kernel resources
-      kernelInfo.kernel.spawn.kill();
-      kernelInfo.disconnectSockets();
-      fs.unlink(kernelInfo.kernel.connectionFile);
+    // Clean-up kernel resources
+    kernelInfo.kernel.spawn.kill();
+    kernelInfo.disconnectSockets();
+    fs.unlink(kernelInfo.kernel.connectionFile);
 
-      // Send success
-      res.send(JSON.stringify({id: id}));
-    } catch(error) {
-      res.status(500).send(JSON.stringify({error: 'Could not shutdown the kernel respectfully'}));
-      console.error(error);
-    }
-    delete kernels[id];
-    logger.kernelStopped(id);
+    // Send success
+    res.send(JSON.stringify({id: id}));
+    return id;
   }).catch(err => {
     res.status(500).send(JSON.stringify({error: 'Error in shutdown request/response'}));
     console.error(err);
+  }).then(id => {
+    delete kernels[id];
+    logger.kernelStopped(id);
   });
 });
 
