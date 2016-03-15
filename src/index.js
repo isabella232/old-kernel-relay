@@ -92,6 +92,9 @@ app.get('/shutdown/*', function(req, res) {
     }
     delete kernels[id];
     logger.kernelStopped(id);
+  }).catch(err => {
+    res.status(500).send(JSON.stringify({error: 'Error in shutdown request/response'}));
+    console.error(err);
   });
 });
 
