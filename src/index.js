@@ -1,6 +1,6 @@
 const app = require('express')();
 const http = require('http').Server(app);
-const uuid = require('node-uuid').v4;
+const uuid = require('uuid').v4;
 const spawnteract = require('spawnteract');
 const enchannel = require('enchannel');
 const enchannelBackend = require('enchannel-zmq-backend');
