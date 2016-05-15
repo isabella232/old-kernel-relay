@@ -1,6 +1,6 @@
 {
   "name": "kernel-relay",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "websocket-zmq relay for Jupyter kernels ",
   "main": "src/index.js",
   "scripts": {
