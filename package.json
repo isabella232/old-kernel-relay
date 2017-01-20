@@ -29,15 +29,15 @@
   "dependencies": {
     "chalk": "^1.1.1",
     "enchannel": "^1.1.2",
-    "enchannel-zmq-backend": "^1.1.0",
+    "enchannel-zmq-backend": "^2.6.1",
     "express": "^4.13.4",
-    "uuid": "^2.0.2",
+    "uuid": "^3.0.1",
     "socket.io": "^1.4.5",
-    "spawnteract": "^1.0.2"
+    "spawnteract": "^2.2.1"
   },
   "devDependencies": {
     "chai": "^3.5.0",
-    "mocha": "^2.4.5",
+    "mocha": "^3.2.0",
     "sinon": "^1.17.3"
   }
 }
