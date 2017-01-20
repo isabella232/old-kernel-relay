@@ -1,4 +1,6 @@
 # kernel-relay
+
+[![Greenkeeper badge](https://badges.greenkeeper.io/nteract/kernel-relay.svg)](https://greenkeeper.io/)
 Server application used to connect an
 [enchannel-socketio-backend](https://github.com/nteract/enchannel-socketio-backend)
 to a Jupyter kernel.
